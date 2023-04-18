@@ -2,12 +2,13 @@ package pg2mysql
 
 type Config struct {
 	MySQL struct {
-		Database string `yaml:"database"`
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-		Host     string `yaml:"host"`
-		Port     int    `yaml:"port"`
-	} `yaml:"mysql"`
+		Database string            `yaml:"database"`
+		Username string            `yaml:"username"`
+		Password string            `yaml:"password"`
+		Host     string            `yaml:"host"`
+		Port     int               `yaml:"port"`
+		Params   map[string]string `yaml:"params" default:"{}"`
+	}
 
 	PostgreSQL struct {
 		Database string `yaml:"database"`

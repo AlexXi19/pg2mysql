@@ -2,8 +2,7 @@ package commands
 
 import (
 	"fmt"
-
-	"github.com/pivotal-cf/pg2mysql"
+	"pg2mysql"
 )
 
 type VerifyCommand struct{}
@@ -15,6 +14,7 @@ func (c *VerifyCommand) Execute([]string) error {
 		PG2MySQL.Config.MySQL.Password,
 		PG2MySQL.Config.MySQL.Host,
 		PG2MySQL.Config.MySQL.Port,
+		PG2MySQL.Config.MySQL.Params,
 	)
 
 	err := mysql.Open()

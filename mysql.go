@@ -13,7 +13,11 @@ func NewMySQLDB(
 	password string,
 	host string,
 	port int,
+	params map[string]string,
 ) DB {
+	params["parseTime"] = "true"
+	params["charset"] = "utf8"
+
 	config := mysql.Config{
 		User:            username,
 		Passwd:          password,
@@ -21,10 +25,7 @@ func NewMySQLDB(
 		Net:             "tcp",
 		Addr:            fmt.Sprintf("%s:%d", host, port),
 		MultiStatements: true,
-		Params: map[string]string{
-			"charset":   "utf8",
-			"parseTime": "True",
-		},
+		Params:          params,
 	}
 
 	return &mySQLDB{

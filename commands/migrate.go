@@ -2,8 +2,7 @@ package commands
 
 import (
 	"fmt"
-
-	"github.com/pivotal-cf/pg2mysql"
+	"pg2mysql"
 )
 
 type MigrateCommand struct {
@@ -17,6 +16,7 @@ func (c *MigrateCommand) Execute([]string) error {
 		PG2MySQL.Config.MySQL.Password,
 		PG2MySQL.Config.MySQL.Host,
 		PG2MySQL.Config.MySQL.Port,
+		PG2MySQL.Config.MySQL.Params,
 	)
 
 	err := mysql.Open()
