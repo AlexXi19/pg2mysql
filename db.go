@@ -148,10 +148,12 @@ func GetIncompatibleRowIDs(db DB, src, dst *Table) ([]int, error) {
 
 	limits := make([]string, len(columns))
 	for i, column := range columns {
-		limits[i] = fmt.Sprintf("LENGTH(%s) > %d", column.Name, column.MaxChars)
+		// Casting to handle enums
+		limits[i] = fmt.Sprintf("LENGTH(\"%s\"::text) > %d", column.Name, column.MaxChars)
 	}
 
-	stmt := fmt.Sprintf("SELECT id FROM %s WHERE %s", src.Name, strings.Join(limits, " OR "))
+	// Adding quotes to handle mixed case column names
+	stmt := fmt.Sprintf("SELECT id FROM \"%s\" WHERE %s", src.Name, strings.Join(limits, " OR "))
 	rows, err := db.DB().Query(stmt)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting incompatible row ids: %s", err)

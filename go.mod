@@ -3,7 +3,7 @@ module pg2mysql
 go 1.19
 
 require (
-	github.com/go-sql-driver/mysql v1.3.1-0.20170327113021-9dee4ca50b83
+	github.com/go-sql-driver/mysql v1.7.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/lib/pq v0.0.0-20170324204654-2704adc878c2
 	github.com/onsi/ginkgo v1.16.5
