@@ -3,6 +3,9 @@ package commands
 import (
 	"fmt"
 	"pg2mysql"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 type ValidateCommand struct{}
@@ -45,10 +48,11 @@ func (c *ValidateCommand) Execute([]string) error {
 		return fmt.Errorf("failed to validate: %s", err)
 	}
 
-	for _, result := range results {
+	for _, result := range sortValidatorResults(results) {
 		switch {
 		case len(result.IncompatibleRowIDs) > 0:
-			fmt.Printf("found %d incompatible rows in %s with IDs %v\n", result.IncompatibleRowCount, result.TableName, result.IncompatibleRowIDs)
+            truncatedIncompatibleRowIDs := truncateStringArray(result.IncompatibleRowIDs, 10)
+			fmt.Printf("found %d incompatible rows in %s with IDs %v\n", result.IncompatibleRowCount, result.TableName, truncatedIncompatibleRowIDs)
 
 		case result.IncompatibleRowCount > 0:
 			fmt.Printf("found %d incompatible rows in %s (which has no 'id' column)\n", result.IncompatibleRowCount, result.TableName)
@@ -59,4 +63,33 @@ func (c *ValidateCommand) Execute([]string) error {
 	}
 
 	return nil
+}
+
+func sortValidatorResults(results []pg2mysql.ValidationResult) []pg2mysql.ValidationResult {
+    sort.Slice(results, func(i, j int) bool {
+        return results[i].TableName < results[j].TableName
+    })
+
+    return results
+}
+
+func truncateStringArray(arr []string, max int) string {
+	if len(arr) > max {
+		// if the array has more than the maximum elements, truncate it
+		truncated := arr[:max]
+		// calculate how many elements were truncated
+		truncatedCount := len(arr) - max
+		// create a string of the truncated count
+		truncatedStr := strconv.Itoa(truncatedCount) + " more"
+		// create a string of the truncated array
+		truncatedArrStr := "[" + strings.Join(truncated, ", ") + ", ..."
+		// append the truncated string to the end
+		finalStr := truncatedArrStr + "]" + " and " + truncatedStr
+		// print the final string
+		return finalStr
+	} else {
+		// if the array has less than or equal to the maximum elements, just join and print it
+		str := "[" + strings.Join(arr, ", ") + "]"
+	   return str
+	}
 }

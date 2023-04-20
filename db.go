@@ -12,6 +12,8 @@ type DB interface {
 	Open() error
 	Close() error
 	GetSchemaRows() (*sql.Rows, error)
+	GetPrimaryKey(tableName string) (string, error)
+	HasPrimaryKey(tableName string) (bool, error)
 	DisableConstraints() error
 	EnableConstraints() error
 	ColumnNameForSelect(columnName string) string
@@ -137,6 +139,10 @@ func GetIncompatibleColumns(src, dst *Table) ([]*Column, error) {
 }
 
 func GetIncompatibleRowIDs(db DB, src, dst *Table) ([]string, error) {
+	primaryKey, err := db.GetPrimaryKey(dst.Name)
+	if err != nil {
+		return nil, err
+	}
 	columns, err := GetIncompatibleColumns(src, dst)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting incompatible columns: %s", err)
@@ -148,12 +154,13 @@ func GetIncompatibleRowIDs(db DB, src, dst *Table) ([]string, error) {
 
 	limits := make([]string, len(columns))
 	for i, column := range columns {
-		// Casting to handle enums
+		// Casting to handle special datatypes like enums
 		limits[i] = fmt.Sprintf("LENGTH(\"%s\"::text) > %d", column.Name, column.MaxChars)
 	}
 
 	// Adding quotes to handle mixed case column names
-	stmt := fmt.Sprintf("SELECT id FROM \"%s\" WHERE %s", src.Name, strings.Join(limits, " OR "))
+	stmt := fmt.Sprintf("SELECT \"%s\" FROM \"%s\" WHERE %s", primaryKey, src.Name, strings.Join(limits, " OR "))
+
 	rows, err := db.DB().Query(stmt)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting incompatible row ids: %s", err)

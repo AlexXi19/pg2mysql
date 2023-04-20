@@ -54,7 +54,13 @@ func (v *validator) Validate(validationConfig ValidationConfig) ([]ValidationRes
 			return nil, fmt.Errorf("failed to get table from destination schema: %s", err)
 		}
 
-		if srcTable.HasColumn("id") {
+		// TODO: Can refactor to using the primary key instead of using the id column
+		hasSrcPrimaryKey, err := v.src.HasPrimaryKey(srcTable.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get primary key from source table: %s", err)
+		}
+
+		if hasSrcPrimaryKey {
 			rowIDs, err := GetIncompatibleRowIDs(v.src, srcTable, dstTable)
 			if err != nil {
 				return nil, fmt.Errorf("failed getting incompatible row ids: %s", err)

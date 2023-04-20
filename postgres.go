@@ -51,6 +51,41 @@ func (p *postgreSQLDB) Close() error {
 	return p.db.Close()
 }
 
+func (p *postgreSQLDB) HasPrimaryKey(tableName string) (bool, error) {
+	primaryKey, err := p.GetPrimaryKey(tableName)
+	if err != nil {
+		return false, err
+	}
+
+	return primaryKey != "", nil
+}
+
+func (p *postgreSQLDB) GetPrimaryKey(tableName string) (string, error) {
+	stmt := `
+		SELECT kcu.column_name
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu
+			ON tc.constraint_name = kcu.constraint_name
+			AND tc.table_schema = kcu.table_schema
+			AND tc.table_name = kcu.table_name
+		WHERE tc.constraint_type = 'PRIMARY KEY'
+		AND tc.table_schema = 'public'
+		AND tc.table_name = $1`
+
+	var primaryKey string
+	err := p.db.QueryRow(stmt, tableName).Scan(&primaryKey)
+	if err == sql.ErrNoRows {
+		// No primary key found
+		return "", nil
+	} else if err != nil {
+		// Other error occurred
+		return "", err
+	}
+
+	// Primary key found
+	return primaryKey, nil
+}
+
 func (p *postgreSQLDB) GetSchemaRows() (*sql.Rows, error) {
 	stmt := `
 	SELECT t1.table_name,
