@@ -51,8 +51,9 @@ func (c *ValidateCommand) Execute([]string) error {
 	for _, result := range sortValidatorResults(results) {
 		switch {
 		case len(result.IncompatibleRowIDs) > 0:
-            truncatedIncompatibleRowIDs := truncateStringArray(result.IncompatibleRowIDs, 10)
-			fmt.Printf("found %d incompatible rows in %s with IDs %v\n", result.IncompatibleRowCount, result.TableName, truncatedIncompatibleRowIDs)
+			truncatedIncompatibleRowIDs := truncateStringArray(result.IncompatibleRowIDs, 10)
+            formattedColumnNames := "[" + strings.Join(result.IncompatibleColumns, ", ") + "]"
+			fmt.Printf("found %d incompatible rows in %s with column names %v with IDs %v\n", result.IncompatibleRowCount, result.TableName, formattedColumnNames, truncatedIncompatibleRowIDs)
 
 		case result.IncompatibleRowCount > 0:
 			fmt.Printf("found %d incompatible rows in %s (which has no 'id' column)\n", result.IncompatibleRowCount, result.TableName)
@@ -66,11 +67,11 @@ func (c *ValidateCommand) Execute([]string) error {
 }
 
 func sortValidatorResults(results []pg2mysql.ValidationResult) []pg2mysql.ValidationResult {
-    sort.Slice(results, func(i, j int) bool {
-        return results[i].TableName < results[j].TableName
-    })
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].TableName < results[j].TableName
+	})
 
-    return results
+	return results
 }
 
 func truncateStringArray(arr []string, max int) string {
@@ -90,6 +91,6 @@ func truncateStringArray(arr []string, max int) string {
 	} else {
 		// if the array has less than or equal to the maximum elements, just join and print it
 		str := "[" + strings.Join(arr, ", ") + "]"
-	   return str
+		return str
 	}
 }

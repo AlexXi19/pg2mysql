@@ -138,78 +138,90 @@ func GetIncompatibleColumns(src, dst *Table) ([]*Column, error) {
 	return incompatibleColumns, nil
 }
 
-func GetIncompatibleRowIDs(db DB, src, dst *Table) ([]string, error) {
+// Returns incompatible rows ids and incompatible column names
+func GetIncompatibleRowIDsAndColumns(db DB, src, dst *Table) ([]string, []string, error) {
 	primaryKey, err := db.GetPrimaryKey(dst.Name)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	columns, err := GetIncompatibleColumns(src, dst)
 	if err != nil {
-		return nil, fmt.Errorf("failed getting incompatible columns: %s", err)
+		return nil, nil, fmt.Errorf("failed getting incompatible columns: %s", err)
 	}
 
 	if columns == nil {
-		return nil, nil
-	}
-
-	limits := make([]string, len(columns))
-	for i, column := range columns {
-		// Casting to handle special datatypes like enums
-		limits[i] = fmt.Sprintf("LENGTH(\"%s\"::text) > %d", column.Name, column.MaxChars)
-	}
-
-	// Adding quotes to handle mixed case column names
-	stmt := fmt.Sprintf("SELECT \"%s\" FROM \"%s\" WHERE %s", primaryKey, src.Name, strings.Join(limits, " OR "))
-
-	rows, err := db.DB().Query(stmt)
-	if err != nil {
-		return nil, fmt.Errorf("failed getting incompatible row ids: %s", err)
+		return nil, nil, nil
 	}
 
 	var rowIDs []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %s", err)
+	var columnNames []string
+	for _, column := range columns {
+		// Casting to handle special datatypes like enums
+		limit := fmt.Sprintf("LENGTH(\"%s\"::text) > %d", column.Name, column.MaxChars)
+		stmt := fmt.Sprintf("SELECT \"%s\" FROM \"%s\" WHERE %s", primaryKey, src.Name, limit)
+
+		rows, err := db.DB().Query(stmt)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed getting incompatible row ids: %s", err)
 		}
-		rowIDs = append(rowIDs, id)
+
+		rowCount := 0
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				return nil, nil, fmt.Errorf("failed to scan row: %s", err)
+			}
+			rowIDs = append(rowIDs, id)
+			rowCount++
+		}
+
+		if rowCount > 0 {
+			columnNames = append(columnNames, column.Name)
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, nil, err
+		}
+
+		if err := rows.Close(); err != nil {
+			return nil, nil, err
+		}
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+	// Adding quotes to handle mixed case column names
 
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-
-	return rowIDs, nil
+	return rowIDs, columnNames, nil
 }
 
-func GetIncompatibleRowCount(db DB, src, dst *Table) (int64, error) {
+func GetIncompatibleRowCount(db DB, src, dst *Table) (int64, []string, error) {
 	columns, err := GetIncompatibleColumns(src, dst)
 	if err != nil {
-		return 0, fmt.Errorf("failed getting incompatible columns: %s", err)
+		return 0, nil, fmt.Errorf("failed getting incompatible columns: %s", err)
 	}
 
 	if columns == nil {
-		return 0, nil
+		return 0, []string{}, nil
 	}
 
-	limits := make([]string, len(columns))
-	for i, column := range columns {
-		limits[i] = fmt.Sprintf("length(\"%s\"::text) > %d", column.Name, column.MaxChars)
+	count := int64(0)
+	var columnNames []string
+	for _, column := range columns {
+		limit := fmt.Sprintf("length(\"%s\"::text) > %d", column.Name, column.MaxChars)
+		stmt := fmt.Sprintf("SELECT count(1) FROM \"%s\" WHERE %s", src.Name, limit)
+
+		var currCount int64
+		err = db.DB().QueryRow(stmt).Scan(&currCount)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		if currCount > 0 {
+			columnNames = append(columnNames, column.Name)
+		}
+		count += currCount
 	}
 
-	stmt := fmt.Sprintf("SELECT count(1) FROM \"%s\" WHERE %s", src.Name, strings.Join(limits, " OR "))
-
-	var count int64
-	err = db.DB().QueryRow(stmt).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-
-	return count, nil
+	return count, columnNames, nil
 }
 
 func EachMissingRow(src, dst DB, table *Table, f func([]interface{})) error {

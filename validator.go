@@ -61,7 +61,7 @@ func (v *validator) Validate(validationConfig ValidationConfig) ([]ValidationRes
 		}
 
 		if hasSrcPrimaryKey {
-			rowIDs, err := GetIncompatibleRowIDs(v.src, srcTable, dstTable)
+			rowIDs, columnNames, err := GetIncompatibleRowIDsAndColumns(v.src, srcTable, dstTable)
 			if err != nil {
 				return nil, fmt.Errorf("failed getting incompatible row ids: %s", err)
 			}
@@ -70,9 +70,10 @@ func (v *validator) Validate(validationConfig ValidationConfig) ([]ValidationRes
 				TableName:            srcTable.Name,
 				IncompatibleRowIDs:   rowIDs,
 				IncompatibleRowCount: int64(len(rowIDs)),
+				IncompatibleColumns:  columnNames,
 			})
 		} else {
-			rowCount, err := GetIncompatibleRowCount(v.src, srcTable, dstTable)
+			rowCount, columnNames, err := GetIncompatibleRowCount(v.src, srcTable, dstTable)
 			if err != nil {
 				return nil, fmt.Errorf("failed getting incompatible row count: %s", err)
 			}
@@ -80,6 +81,7 @@ func (v *validator) Validate(validationConfig ValidationConfig) ([]ValidationRes
 			results = append(results, ValidationResult{
 				TableName:            srcTable.Name,
 				IncompatibleRowCount: rowCount,
+				IncompatibleColumns:  columnNames,
 			})
 		}
 	}
@@ -87,12 +89,9 @@ func (v *validator) Validate(validationConfig ValidationConfig) ([]ValidationRes
 	return results, nil
 }
 
-func contains(s1 []string, s2 string) {
-	panic("unimplemented")
-}
-
 type ValidationResult struct {
 	TableName            string
 	IncompatibleRowIDs   []string
+	IncompatibleColumns  []string
 	IncompatibleRowCount int64
 }
