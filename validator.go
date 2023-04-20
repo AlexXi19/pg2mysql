@@ -5,7 +5,7 @@ import (
 )
 
 type Validator interface {
-	Validate() ([]ValidationResult, error)
+	Validate(validationConfig ValidationConfig) ([]ValidationResult, error)
 }
 
 func NewValidator(src, dst DB) Validator {
@@ -19,7 +19,20 @@ type validator struct {
 	src, dst DB
 }
 
-func (v *validator) Validate() ([]ValidationResult, error) {
+type ValidationConfig struct {
+	IgnoreTables []string
+}
+
+func ignoreTable(table string, tables []string) bool {
+	for _, t := range tables {
+		if t == table {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *validator) Validate(validationConfig ValidationConfig) ([]ValidationResult, error) {
 	srcSchema, err := BuildSchema(v.src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build source schema: %s", err)
@@ -32,6 +45,10 @@ func (v *validator) Validate() ([]ValidationResult, error) {
 
 	var results []ValidationResult
 	for _, srcTable := range srcSchema.Tables {
+		if ignoreTable(srcTable.Name, validationConfig.IgnoreTables) {
+			continue
+		}
+
 		dstTable, err := dstSchema.GetTable(srcTable.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get table from destination schema: %s", err)
@@ -64,8 +81,12 @@ func (v *validator) Validate() ([]ValidationResult, error) {
 	return results, nil
 }
 
+func contains(s1 []string, s2 string) {
+	panic("unimplemented")
+}
+
 type ValidationResult struct {
 	TableName            string
-	IncompatibleRowIDs   []int
+	IncompatibleRowIDs   []string
 	IncompatibleRowCount int64
 }

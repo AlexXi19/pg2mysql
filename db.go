@@ -136,7 +136,7 @@ func GetIncompatibleColumns(src, dst *Table) ([]*Column, error) {
 	return incompatibleColumns, nil
 }
 
-func GetIncompatibleRowIDs(db DB, src, dst *Table) ([]int, error) {
+func GetIncompatibleRowIDs(db DB, src, dst *Table) ([]string, error) {
 	columns, err := GetIncompatibleColumns(src, dst)
 	if err != nil {
 		return nil, fmt.Errorf("failed getting incompatible columns: %s", err)
@@ -159,9 +159,9 @@ func GetIncompatibleRowIDs(db DB, src, dst *Table) ([]int, error) {
 		return nil, fmt.Errorf("failed getting incompatible row ids: %s", err)
 	}
 
-	var rowIDs []int
+	var rowIDs []string
 	for rows.Next() {
-		var id int
+		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %s", err)
 		}
@@ -191,10 +191,10 @@ func GetIncompatibleRowCount(db DB, src, dst *Table) (int64, error) {
 
 	limits := make([]string, len(columns))
 	for i, column := range columns {
-		limits[i] = fmt.Sprintf("length(%s) > %d", column.Name, column.MaxChars)
+		limits[i] = fmt.Sprintf("length(\"%s\"::text) > %d", column.Name, column.MaxChars)
 	}
 
-	stmt := fmt.Sprintf("SELECT count(1) FROM %s WHERE %s", src.Name, strings.Join(limits, " OR "))
+	stmt := fmt.Sprintf("SELECT count(1) FROM \"%s\" WHERE %s", src.Name, strings.Join(limits, " OR "))
 
 	var count int64
 	err = db.DB().QueryRow(stmt).Scan(&count)
