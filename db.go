@@ -138,8 +138,13 @@ func GetIncompatibleColumns(src, dst *Table) ([]*Column, error) {
 	return incompatibleColumns, nil
 }
 
+type IncompatibleColumnMetadata struct {
+	ColumnName string
+	MaxChars   int64
+}
+
 // Returns incompatible rows ids and incompatible column names
-func GetIncompatibleRowIDsAndColumns(db DB, src, dst *Table) ([]string, []string, error) {
+func GetIncompatibleRowIDsAndColumns(db DB, src, dst *Table) ([]string, []IncompatibleColumnMetadata, error) {
 	primaryKey, err := db.GetPrimaryKey(dst.Name)
 	if err != nil {
 		return nil, nil, err
@@ -154,7 +159,7 @@ func GetIncompatibleRowIDsAndColumns(db DB, src, dst *Table) ([]string, []string
 	}
 
 	var rowIDs []string
-	var columnNames []string
+	var columnNamesAndMax []IncompatibleColumnMetadata
 	for _, column := range columns {
 		// Casting to handle special datatypes like enums
 		limit := fmt.Sprintf("LENGTH(\"%s\"::text) > %d", column.Name, column.MaxChars)
@@ -171,12 +176,25 @@ func GetIncompatibleRowIDsAndColumns(db DB, src, dst *Table) ([]string, []string
 			if err := rows.Scan(&id); err != nil {
 				return nil, nil, fmt.Errorf("failed to scan row: %s", err)
 			}
+
 			rowIDs = append(rowIDs, id)
 			rowCount++
 		}
 
 		if rowCount > 0 {
-			columnNames = append(columnNames, column.Name)
+			// Create a SQL statement to get the maximum length of the column
+			maxStmt := fmt.Sprintf("SELECT MAX(LENGTH(\"%s\"::text)) FROM \"%s\"", column.Name, src.Name)
+
+			// Execute the SQL statement and get the result
+			var maxChars int
+			err := db.DB().QueryRow(maxStmt).Scan(&maxChars)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed getting max chars: %s", err)
+			}
+			columnNamesAndMax = append(columnNamesAndMax, IncompatibleColumnMetadata{
+				ColumnName: column.Name,
+				MaxChars:   int64(maxChars),
+			})
 		}
 
 		if err := rows.Err(); err != nil {
@@ -190,21 +208,21 @@ func GetIncompatibleRowIDsAndColumns(db DB, src, dst *Table) ([]string, []string
 
 	// Adding quotes to handle mixed case column names
 
-	return rowIDs, columnNames, nil
+	return rowIDs, columnNamesAndMax, nil
 }
 
-func GetIncompatibleRowCount(db DB, src, dst *Table) (int64, []string, error) {
+func GetIncompatibleRowCount(db DB, src, dst *Table) (int64, []IncompatibleColumnMetadata, error) {
 	columns, err := GetIncompatibleColumns(src, dst)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed getting incompatible columns: %s", err)
 	}
 
 	if columns == nil {
-		return 0, []string{}, nil
+		return 0, nil, nil
 	}
 
-	count := int64(0)
-	var columnNames []string
+	var columnNamesAndMax []IncompatibleColumnMetadata
+	var count int64
 	for _, column := range columns {
 		limit := fmt.Sprintf("length(\"%s\"::text) > %d", column.Name, column.MaxChars)
 		stmt := fmt.Sprintf("SELECT count(1) FROM \"%s\" WHERE %s", src.Name, limit)
@@ -216,12 +234,24 @@ func GetIncompatibleRowCount(db DB, src, dst *Table) (int64, []string, error) {
 		}
 
 		if currCount > 0 {
-			columnNames = append(columnNames, column.Name)
+			// Create a SQL statement to get the maximum length of the column
+			maxStmt := fmt.Sprintf("SELECT MAX(LENGTH(\"%s\"::text)) FROM \"%s\"", column.Name, src.Name)
+
+			// Execute the SQL statement and get the result
+			var maxChars int
+			err := db.DB().QueryRow(maxStmt).Scan(&maxChars)
+			if err != nil {
+				return 0, nil, fmt.Errorf("failed getting max chars: %s", err)
+			}
+			columnNamesAndMax = append(columnNamesAndMax, IncompatibleColumnMetadata{
+				ColumnName: column.Name,
+				MaxChars:   int64(maxChars),
+			})
 		}
 		count += currCount
 	}
 
-	return count, columnNames, nil
+	return count, columnNamesAndMax, nil
 }
 
 func EachMissingRow(src, dst DB, table *Table, f func([]interface{})) error {

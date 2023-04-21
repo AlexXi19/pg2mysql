@@ -52,7 +52,7 @@ func (c *ValidateCommand) Execute([]string) error {
 		switch {
 		case len(result.IncompatibleRowIDs) > 0:
 			truncatedIncompatibleRowIDs := truncateStringArray(result.IncompatibleRowIDs, 10)
-            formattedColumnNames := "[" + strings.Join(result.IncompatibleColumns, ", ") + "]"
+            formattedColumnNames := formatIncompatibleColumnMetadata(result.IncompatibleColumnMetadata)
 			fmt.Printf("found %d incompatible rows in %s with column names %v with IDs %v\n", result.IncompatibleRowCount, result.TableName, formattedColumnNames, truncatedIncompatibleRowIDs)
 
 		case result.IncompatibleRowCount > 0:
@@ -64,6 +64,15 @@ func (c *ValidateCommand) Execute([]string) error {
 	}
 
 	return nil
+}
+
+func formatIncompatibleColumnMetadata(incompatibleColumnMetadata []pg2mysql.IncompatibleColumnMetadata) string {
+    var str = "["
+    for _, columnMetadata := range incompatibleColumnMetadata {
+        str += "{ColumnName: " + columnMetadata.ColumnName + ", " + fmt.Sprintf("MaxChars: %v", columnMetadata.MaxChars) + "}"
+    }
+
+    return str + "]"
 }
 
 func sortValidatorResults(results []pg2mysql.ValidationResult) []pg2mysql.ValidationResult {
