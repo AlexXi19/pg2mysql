@@ -266,13 +266,13 @@ func EachMissingRow(src, dst DB, table *Table, f func([]interface{})) error {
 	}
 
 	// select all rows in src
-	stmt := fmt.Sprintf("SELECT %s FROM %s", strings.Join(srcColumnNamesForSelect, ","), table.Name)
+	stmt := fmt.Sprintf("SELECT %s FROM \"%s\"", strings.Join(srcColumnNamesForSelect, ","), table.Name)
 	rows, err := src.DB().Query(stmt)
 	if err != nil {
 		return fmt.Errorf("failed to select rows: %s", err)
 	}
 
-	stmt = fmt.Sprintf(`SELECT EXISTS (SELECT 1 FROM %s WHERE %s)`, table.Name, strings.Join(colVals, " AND "))
+	stmt = fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM `%s` WHERE %s)", table.Name, strings.Join(colVals, " AND "))
 	preparedStmt, err := dst.DB().Prepare(stmt)
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %s", err)

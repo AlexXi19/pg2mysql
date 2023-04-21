@@ -9,7 +9,7 @@ import (
 )
 
 type Migrator interface {
-	Migrate() error
+	Migrate(migrationConfig MigrationConfig) error
 }
 
 func NewMigrator(src, dst DB, truncateFirst bool, watcher MigratorWatcher) Migrator {
@@ -27,7 +27,7 @@ type migrator struct {
 	watcher       MigratorWatcher
 }
 
-func (m *migrator) Migrate() error {
+func (m *migrator) Migrate(migrationConfig MigrationConfig) error {
 	srcSchema, err := BuildSchema(m.src)
 	if err != nil {
 		return fmt.Errorf("failed to build source schema: %s", err)
@@ -51,6 +51,10 @@ func (m *migrator) Migrate() error {
 	}()
 
 	for _, table := range srcSchema.Tables {
+		if ignoreTable(table.Name, migrationConfig.IgnoreTables) {
+			continue
+		}
+
 		if m.truncateFirst {
 			m.watcher.WillTruncateTable(table.Name)
 			_, err := m.dst.DB().Exec(fmt.Sprintf("TRUNCATE TABLE %s", table.Name))
@@ -68,11 +72,12 @@ func (m *migrator) Migrate() error {
 		}
 
 		preparedStmt, err := m.dst.DB().Prepare(fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES (%s)",
+			"INSERT INTO `%s` (%s) VALUES (%s)",
 			table.Name,
 			strings.Join(columnNamesForInsert, ","),
 			strings.Join(placeholders, ","),
 		))
+
 		if err != nil {
 			return fmt.Errorf("failed creating prepared statement: %s", err)
 		}
@@ -81,8 +86,12 @@ func (m *migrator) Migrate() error {
 
 		m.watcher.TableMigrationDidStart(table.Name)
 
-		if table.HasColumn("id") {
-			err = migrateWithIDs(m.watcher, m.src, m.dst, table, &recordsInserted, preparedStmt)
+		hasSrcPrimaryKey, err := m.src.HasPrimaryKey(table.Name)
+		if err != nil {
+			return fmt.Errorf("failed to get primary key from source table: %s", err)
+		}
+		if hasSrcPrimaryKey {
+			err = migrateWithPrimaryKeys(m.watcher, m.src, m.dst, table, &recordsInserted, preparedStmt)
 			if err != nil {
 				return fmt.Errorf("failed migrating table with ids: %s", err)
 			}
@@ -106,7 +115,7 @@ func (m *migrator) Migrate() error {
 	return nil
 }
 
-func migrateWithIDs(
+func migrateWithPrimaryKeys(
 	watcher MigratorWatcher,
 	src DB,
 	dst DB,
@@ -118,14 +127,19 @@ func migrateWithIDs(
 	values := make([]interface{}, len(table.Columns))
 	scanArgs := make([]interface{}, len(table.Columns))
 	for i := range table.Columns {
-		columnNamesForSelect[i] = table.Columns[i].Name
+		columnNamesForSelect[i] = fmt.Sprintf("\"%s\"", table.Columns[i].Name)
 		scanArgs[i] = &values[i]
 	}
 
 	// find ids already in dst
-	rows, err := dst.DB().Query(fmt.Sprintf("SELECT id FROM %s", table.Name))
+	primaryKey, err := src.GetPrimaryKey(table.Name)
 	if err != nil {
-		return fmt.Errorf("failed to select id from rows: %s", err)
+		return err
+	}
+
+	rows, err := dst.DB().Query(fmt.Sprintf("SELECT `%s` FROM `%s`", primaryKey, table.Name))
+	if err != nil {
+		return fmt.Errorf("failed to select primary key from rows: %s", err)
 	}
 
 	var dstIDs []interface{}
@@ -146,20 +160,20 @@ func migrateWithIDs(
 	}
 
 	// select data for ids to migrate from src
-	stmt := fmt.Sprintf(
-		"SELECT %s FROM %s",
-		strings.Join(columnNamesForSelect, ","),
-		table.Name,
-	)
-
-	if len(dstIDs) > 0 {
-		placeholders := make([]string, len(dstIDs))
-		for i := range dstIDs {
-			placeholders[i] = fmt.Sprintf("$%d", i+1)
-		}
-
-		stmt = fmt.Sprintf("%s WHERE id NOT IN (%s)", stmt, strings.Join(placeholders, ","))
+	// Create placeholders for the IN clause
+	placeholders := make([]string, len(dstIDs))
+	for i := range dstIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
 	}
+
+	// Construct the query with unnest and placeholders
+	stmt := fmt.Sprintf(`
+		SELECT %s
+		FROM "%s"
+		WHERE "%s" NOT IN (
+			SELECT unnest(ARRAY[%s]::text[])
+		)
+	`, strings.Join(columnNamesForSelect, ","), table.Name, primaryKey, strings.Join(placeholders, ","))
 
 	rows, err = src.DB().Query(stmt, dstIDs...)
 	if err != nil {

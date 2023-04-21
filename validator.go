@@ -5,7 +5,7 @@ import (
 )
 
 type Validator interface {
-	Validate(validationConfig ValidationConfig) ([]ValidationResult, error)
+	Validate(validationConfig MigrationConfig) ([]ValidationResult, error)
 }
 
 func NewValidator(src, dst DB) Validator {
@@ -19,7 +19,7 @@ type validator struct {
 	src, dst DB
 }
 
-type ValidationConfig struct {
+type MigrationConfig struct {
 	IgnoreTables []string
 }
 
@@ -32,7 +32,7 @@ func ignoreTable(table string, tables []string) bool {
 	return false
 }
 
-func (v *validator) Validate(validationConfig ValidationConfig) ([]ValidationResult, error) {
+func (v *validator) Validate(validationConfig MigrationConfig) ([]ValidationResult, error) {
 	srcSchema, err := BuildSchema(v.src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build source schema: %s", err)

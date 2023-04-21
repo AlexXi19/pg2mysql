@@ -41,7 +41,7 @@ func (c *ValidateCommand) Execute([]string) error {
 	defer pg.Close()
 
 	results, err := pg2mysql.NewValidator(pg, mysql).Validate(
-		pg2mysql.ValidationConfig{
+		pg2mysql.MigrationConfig{
 			IgnoreTables: PG2MySQL.Config.PostgreSQL.IgnoredTables,
 		})
 	if err != nil {

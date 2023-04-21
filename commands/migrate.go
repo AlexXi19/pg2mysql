@@ -40,7 +40,10 @@ func (c *MigrateCommand) Execute([]string) error {
 	defer pg.Close()
 
 	watcher := pg2mysql.NewStdoutPrinter()
-	err = pg2mysql.NewMigrator(pg, mysql, c.Truncate, watcher).Migrate()
+	err = pg2mysql.NewMigrator(pg, mysql, c.Truncate, watcher).Migrate(
+		pg2mysql.MigrationConfig{
+			IgnoreTables: PG2MySQL.Config.PostgreSQL.IgnoredTables,
+		})
 	if err != nil {
 		return fmt.Errorf("failed migrating: %s", err)
 	}
